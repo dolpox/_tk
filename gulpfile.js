@@ -24,10 +24,10 @@ const config = {
     dist: './dist',
 };
 
-// Concatinate and then uglify the js that are required in main.js
+// Concatinate and then uglify the js that are required in app.js
 gulp.task('scripts', ['clean:scripts', 'uglify'], function() {
     return gulp.src([
-            config.src + '/scripts/main.js'
+            config.src + '/scripts/app.js'
         ])
         .pipe(sourcemaps.init())
         .pipe(include({
@@ -41,38 +41,87 @@ gulp.task('scripts', ['clean:scripts', 'uglify'], function() {
         .pipe(browserSync.stream());
 });
 
-// Uglyfy js except for main.js
+// Uglyfy js except for app.js
 gulp.task('uglify', ['clean:scripts'], function() {
     return gulp.src([
             config.src + '/scripts/**/*',
-            '!assets/scripts/main.js'
+            '!assets/scripts/app.js'
         ])
         .pipe(uglify())
         .pipe(gulp.dest(config.dist + '/scripts'))
         .pipe(browserSync.stream());
 });
 
-gulp.task('styles', ['clean:styles'], function() {
-    var scssStream = gulp.src([config.src + '/sass/**/*.scss'])
+
+// CSS Version
+// Minify the css and does not concatenate
+gulp.task('css', function() {
+    return gulp.src(config.src + '/css/*.css')
+        .pipe(postcss([autoprefixer('last 2 versions')]))
+        .pipe(cleanCSS({
+            level: {
+                1: {
+                    specialComments: 0
+                }
+            }
+        }))
+        .pipe(gulp.dest(config.dist + '/css'));
+});
+
+// SASS Version
+// Moinfiiy and concatenate
+gulp.task('scss', function() {
+    return gulp.src(config.src + '/scss/**/*.scss')
+        .pipe(sourcemaps.init())
         .pipe(sass({
-            outputStyle: 'compressed',
             includePaths: ['./node_modules'],
         }).on('error', sass.logError))
-        .pipe(concat('scss-files.scss'));
+        .pipe(postcss([autoprefixer('last 2 versions')]))
+        .pipe(concat('app.css'))
+        .pipe(cleanCSS({
+            level: {
+                1: {
+                    specialComments: 0
+                }
+            }
+        }))
+        .pipe(sourcemaps.write('./'))
+        .pipe(gulp.dest(config.dist + '/css'));
+});
 
-    var cssStream = gulp.src([config.src + '/css/**/*.css', './node_modules/flexslider/flexslider.css'])
-        .pipe(concat('css-files.css'))
+// Use this if you want to concatenate the sass and css into one file
+gulp.task('styles', ['clean:styles'], function() {
+    var scssStream = gulp.src(config.src + '/scss/**/*.scss')
+        .pipe(sass({
+            includePaths: ['./node_modules'],
+        }).on('error', sass.logError))
+        .pipe(concat('scss.css'));
+
+    var cssStream = gulp.src(config.src + '/css/*.css')
+        .pipe(concat('css.css'));
 
     var mergedStream = merge(scssStream, cssStream)
-        .pipe(concat('main.css'))
-        .pipe(cleanCSS({level: {1: {specialComments: 0}}}))
+        .pipe(sourcemaps.init())
+        .pipe(postcss([autoprefixer('last 2 versions')]))
+        .pipe(concat('bundle.min.css'))
+        .pipe(cleanCSS({
+            level: {
+                1: {
+                    specialComments: 0
+                }
+            }
+        }))
+        .pipe(sourcemaps.write('./'))
         .pipe(gulp.dest(config.dist + '/css'));
+
     return mergedStream;
 });
 
 gulp.task('images', ['clean:images'], function() {
     gulp.src(config.src + '/images/**/*')
-        .pipe(image())
+        .pipe(image({  
+            concurrent: 3 
+        }))  
         .pipe(gulp.dest(config.dist + '/images'))
         .pipe(browserSync.stream());
 });
@@ -80,14 +129,11 @@ gulp.task('images', ['clean:images'], function() {
 gulp.task('fonts', ['clean:fonts'], function() {
     return gulp.src([
             config.src + '/fonts/**/*',
-            './node_modules/bootstrap-sass/assets/fonts/bootstrap/*',
             './node_modules/font-awesome/fonts/fontawesome-webfont.*',
         ])
         .pipe(gulp.dest(config.dist + '/fonts'))
         .pipe(browserSync.stream());
 });
-
-
 
 // Clean
 gulp.task('clean:styles', function() {
@@ -106,7 +152,11 @@ gulp.task('clean:fonts', function() {
     return del(config.dist + '/fonts');
 });
 
-gulp.task('build', ['scripts', 'uglify', 'styles', 'images']);
+gulp.task('clean', function() {
+    return del(config.dist + '/');
+});
+
+gulp.task('build', ['clean', 'scripts', 'uglify', 'css', 'scss', 'images']);
 
 // compile fonts only if we run gulp
 gulp.task('default', ['build', 'fonts']);
